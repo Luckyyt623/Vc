@@ -1,39 +1,60 @@
-// server.js — WebSocket signaling server for Slither.io VC
+// server.js
+// Simple signaling server for WebRTC voice chat (mesh). Port 3000 by default.
 const WebSocket = require('ws');
-const PORT = process.env.PORT || 3000;
-const wss = new WebSocket.Server({ port: PORT });
+const wss = new WebSocket.Server({ port: 3000 });
+console.log('Signaling server listening ws://0.0.0.0:3000');
 
-const clients = new Map(); // Map<id, ws>
+let clients = new Map(); // id -> ws
 
-wss.on('connection', function connection(ws) {
-  let userId = null;
+function broadcastClientList() {
+  const list = Array.from(clients.keys());
+  const msg = JSON.stringify({ type: 'peers', peers: list });
+  for (const ws of clients.values()) {
+    if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+  }
+}
 
-  ws.on('message', function incoming(msg) {
-    try {
-      const data = JSON.parse(msg);
+wss.on('connection', (ws) => {
+  const id = Date.now().toString(36) + Math.floor(Math.random()*999).toString(36);
+  clients.set(id, ws);
+  console.log('client connected', id);
 
-      if (data.type === 'join' && data.id) {
-        userId = data.id;
-        clients.set(userId, ws);
-        console.log(`🟢 ${userId} connected`);
-        return;
+  // tell the client its id
+  ws.send(JSON.stringify({ type: 'id', id }));
+
+  // broadcast updated peer list
+  broadcastClientList();
+
+  ws.on('message', (raw) => {
+    let data;
+    try { data = JSON.parse(raw); } catch (e) { return; }
+    // routing messages: { type: 'offer'|'answer'|'candidate', to, from, payload }
+    if (data.to && clients.has(data.to)) {
+      const target = clients.get(data.to);
+      if (target.readyState === WebSocket.OPEN) {
+        target.send(JSON.stringify(data));
       }
-
-      if (data.to && clients.has(data.to)) {
-        const recipient = clients.get(data.to);
-        recipient.send(JSON.stringify({ ...data, from: userId }));
+    } else {
+      // fallback: broadcast (not recommended for offers)
+      if (data.type === 'broadcast') {
+        const msg = JSON.stringify(data);
+        for (const [cid, cws] of clients.entries()) {
+          if (cid === id) continue;
+          if (cws.readyState === WebSocket.OPEN) cws.send(msg);
+        }
       }
-    } catch (e) {
-      console.error("❌ Invalid message:", e);
     }
   });
 
   ws.on('close', () => {
-    if (userId && clients.has(userId)) {
-      clients.delete(userId);
-      console.log(`🔴 ${userId} disconnected`);
-    }
+    clients.delete(id);
+    console.log('client disconnected', id);
+    broadcastClientList();
+  });
+
+  ws.on('error', (e) => {
+    clients.delete(id);
+    console.log('ws error', id, e && e.message);
+    broadcastClientList();
   });
 });
-
-console.log(`✅ WebSocket VC server running on port ${PORT}`);
