@@ -1,11 +1,26 @@
 {
-  "name": "slither-vc-server",
+  "name": "slithercontrol-voicechat-server",
   "version": "1.0.0",
+  "description": "WebSocket signaling server for SlitherControl voice chat using WebRTC.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "ws": "^8.13.0"
-  }
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18.x"
+  },
+  "keywords": [
+    "slither.io",
+    "voicechat",
+    "webrtc",
+    "signaling",
+    "nodejs",
+    "ws",
+    "render"
+  ],
+  "author": "Lucky",
+  "license": "MIT"
 }
